@@ -1,0 +1,109 @@
+---
+title: "reprod markdown"
+author: "jmp"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading and preprocessing the data
+
+First we download then load the data, and transform the dates column into dates:
+
+```{r}
+library(tidyverse)
+library(downloader)
+url<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+download(url, dest="dataset.zip", mode="wb") 
+unzip ("dataset.zip", exdir = "./")
+dat<-read.csv("activity.csv")
+dat$date<-as.Date(dat$date, format="%Y-%m-%d")
+```
+
+## What is mean total number of steps taken per day?
+
+This code calculates total steps per dat and plots it as a histogram, then calculates and reports mean and median steps per day
+
+```{r}
+stepday<- dat %>% 
+  group_by(date) %>%
+  summarize(total_steps=sum(steps,na.rm=TRUE))
+
+with(stepday,hist(total_steps))
+
+meanstep<-mean(stepday$total_steps,na.rm = TRUE)
+medianstep<-median(stepday$total_steps,na.rm = TRUE)
+
+meanstep
+medianstep
+```
+
+## What is the average daily activity pattern?
+
+This code calculates average stepts per interval and plots as a time series graph, then calcuates and reports the interval with the highest average number of steps.
+
+```{r}
+stepinterval<-dat %>% 
+  group_by(interval) %>%
+  summarize(av_steps=mean(steps,na.rm=TRUE))
+
+with(stepinterval,plot(interval,av_steps,type="l"))
+
+maxint<- stepinterval$interval[which.max(stepinterval$av_steps)]
+maxint
+```
+
+## Imputing missing values
+
+This code first calculates and reports missing values, then imputes missing values for steps my replacing them with the average value for that interval. Next it replots the histogram and time series charts with the new data. Then it calculates mean and median steps per day and calculates the difference between the new and old figures.
+
+```{r}
+stepna<-sum(is.na(dat$steps))
+stepna
+ 
+dat_imp<- dat 
+
+for(i in 1:17568){
+  if(is.na(dat_imp$steps[i])==TRUE){
+    dat_imp$steps[i]<- as.numeric(subset(stepinterval,interval==dat_imp$interval[i])[2])
+  }
+}
+
+stepday_imp<- dat_imp %>% 
+  group_by(date) %>%
+  summarize(total_steps=sum(steps,na.rm=TRUE))
+
+with(stepday_imp,hist(total_steps))
+
+meanstep_imp<-mean(stepday_imp$total_steps,na.rm = TRUE)
+medianstep_imp<-median(stepday_imp$total_steps,na.rm = TRUE)
+
+mean_diff=meanstep_imp-meanstep
+median_diff=medianstep_imp-medianstep
+
+mean_diff
+median_diff
+```
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+This code creates a new variable stating whether each observation occured on a weekend. It then plots time series charts comparing averages steps taken in each intervale for weekends and weekdays.
+
+```{r}
+dat_imp <- dat_imp %>%
+  mutate(weekend=weekdays(date) %in% c("Saturday","Sunday"))
+
+stepinterval_week<-dat_imp %>% 
+  group_by(interval,weekend) %>%
+  summarize(av_steps=mean(steps,na.rm=TRUE))
+
+ggplot(stepinterval_week,aes(x=interval,y=av_steps))+
+  facet_grid(weekend~.,labeller=as_labeller(c(
+    "FALSE"="Weekday",
+    "TRUE"="Weekend")))+
+  geom_line()
+```
+
